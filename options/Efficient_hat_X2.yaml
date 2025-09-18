@@ -1,0 +1,74 @@
+name: efficient_hat_X2
+model_type: efficient_hat_X2
+scale: 2
+num_gpu: auto
+manual_seed: 0
+resume_training: False
+# dataset and data loader settings
+datasets:
+  train:
+    name: DF2K
+    type: PairedImageDataset
+    dataroot_gt: /home/cj/new_network_modified/datasets/DF2K/DF2K_train_HR 
+    gt_size: 128
+    use_hflip: true
+    use_rot: true
+
+  val:
+    name: Set5
+    type: PairedImageDataset
+    dataroot_gt: /home/cj/new_network_modified/datasets/Set5
+    io_backend:
+      type: disk
+
+
+      
+# Dataloaders
+train_dataloader:
+  batch_size: 64
+  shuffle : True
+val_dataloader:
+  batch_size: 2
+  shuffle: false
+# Checkpoints
+checkpoint: 
+network_g:
+  type: HAT_Vmamba
+  in_chans: 1
+  embed_dims: 96
+  hat_depth: [2,6,4,2]
+  hat_num_heads: [6,6,6,6]
+  window_size: 8
+  compress_ratio: 3
+  squeeze_factor: 30
+  conv_scale: 0.01
+  overlap_ratio: 0.5
+  mlp_ratio: 2.
+  upscale: 2
+  upsampler: 'pixelshuffle'
+  resi_connection: '1conv'
+
+
+train:
+  epoch: 100
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 1e-5
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [15 ,25,30, 35 ,50]
+    gamma: 0.5
+
+  warmup_iter: -1  # no warm up
+
+  # losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+results: /home/cj/new_network_modified/results
+device: cuda
