@@ -39,10 +39,9 @@ class Train_dataset(Dataset):
         img_gt, img_lq = paired_random_crop(img_gt, img_lq, self.gt_size, self.scale, self.hr_pth)
             # flip, rotation
         img_gt, img_lq = augment([img_gt, img_lq], True, True)
-        img_gt = rgb2ycbcr(img_gt)[..., None]
-        img_lq = rgb2ycbcr(img_lq)[..., None]
+        # img_gt = rgb2ycbcr(img_gt)[..., None]
+        # img_lq = rgb2ycbcr(img_lq)[..., None]
         img_gt, img_lq = img2tensor([img_gt, img_lq], float32=True)
-
         return {"GT":img_gt, "LR":img_lq}
 
 class Validation_dataset(Dataset):
