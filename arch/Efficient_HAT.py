@@ -836,7 +836,7 @@ class HAT(nn.Module):
         def forward(self, x):
             
             self.mean = self.mean.type_as(x)
-            x = ((x - self.mean) * self.img_range)/255.
+            x = ((x - self.mean) * self.img_range)
             if self.upsampler == 'pixelshuffle':
             # for classical SR
                 x = self.conv_first(x)

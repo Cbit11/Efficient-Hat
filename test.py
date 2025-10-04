@@ -16,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
 from train import train_step, validation_step
 import cv2
+from basicsr.utils.img_util import tensor2img
 
 file_pth = "/home/cj/new_network_modified/options/Efficient_hat_X2.yaml"
 
@@ -33,9 +34,10 @@ test_data = Validation_dataset(test_data_pth, 4, 256)
 test_loader= DataLoader(test_data, batch_size=1)
 hat.to(device)
 for batch, images in enumerate(test_loader):
-    hr_img= images['GT'].squeeze(0).numpy()*255.
-    lr_img= images['LR'].squeeze(0).numpy()*255.
-    
+    # hr_img= images['GT'].squeeze(0).numpy()*255.
+    # lr_img= images['LR'].squeeze(0).numpy()*255.
+    hr_tensor= images['GT']
+    hr_img= tensor2img(hr_tensor, rgb2bgr=False)
     cv2.imwrite(f"/home/cj/new_network_modified/results/gt_img_{batch}.png", hr_img.astype(np.uint8))
-    cv2.imwrite(f"/home/cj/new_network_modified/results/lq_img_{batch}.png", lr_img.astype(np.uint8))
+    # cv2.imwrite(f"/home/cj/new_network_modified/results/lq_img_{batch}.png", lr_img.astype(np.uint8))
     

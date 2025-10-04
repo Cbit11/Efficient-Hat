@@ -42,7 +42,7 @@ class Train_dataset(Dataset):
         # img_gt = rgb2ycbcr(img_gt)[..., None]
         # img_lq = rgb2ycbcr(img_lq)[..., None]
         img_gt, img_lq = img2tensor([img_gt, img_lq], float32=True)
-        return {"GT":img_gt, "LR":img_lq}
+        return {"GT":img_gt/255., "LR":img_lq/255.}
 
 class Validation_dataset(Dataset):
     def __init__(self, hr_pth, scale, gt_size):
@@ -67,13 +67,10 @@ class Validation_dataset(Dataset):
         size_w = max(size_w, 128)
         img_gt = cv2.resize(gt_img, (size_w, size_h))
         img_lq = imresize(img_gt, 1 / self.scale)
-
+        
         img_gt = np.ascontiguousarray(img_gt, dtype=np.float32)
         img_lq = np.ascontiguousarray(img_lq, dtype=np.float32)
-            # random crop
+        # random crop
         img_gt, img_lq = paired_random_crop(img_gt, img_lq, self.gt_size, self.scale, self.hr_pth)
         img_gt, img_lq = img2tensor([img_gt, img_lq], float32=True)
-
-        return {"GT":img_gt, "LR":img_lq}
-    
-
+        return {"GT":img_gt/255., "LR":img_lq/255.}

@@ -32,10 +32,12 @@ optimizer= get_optimizer(config, hat.parameters())
 lr_scheduler= get_scheduler(config,  hat.parameters())
 writer = SummaryWriter()
 epochs = config['train']['epoch']
-train_data= Train_dataset(train_data_pth, scale = 2)
-val_data= Validation_dataset(val_data_pth, scale= 2)
+train_data= Train_dataset(train_data_pth, scale = 4, gt_size=256)
+if val_data_pth != None:
+  val_data= Validation_dataset(val_data_pth, scale= 4, gt_size=256)
+  val_loader= DataLoader(val_data, batch_size= config['val_dataloader']['batch_size'], shuffle = config['val_dataloader']['shuffle'])
 train_loader= DataLoader(train_data, batch_size= config['train_dataloader']['batch_size'], shuffle = config['train_dataloader']['shuffle'])
-val_loader= DataLoader(val_data, batch_size= config['val_dataloader']['batch_size'], shuffle = config['val_dataloader']['shuffle'])
+
 
 if config['resume_training']:
   hat= resume_training(config, hat)
@@ -44,6 +46,7 @@ if config['resume_training']:
 for epoch in tqdm(range(epochs)):
       train_step(hat, loss, optimizer, lr_scheduler, train_loader, device, epoch)
       if epoch%10==0:
+          if val_data_pth!= None:
            validation_step(hat, loss, val_loader, device)
-           torch.save(hat.state_dict(),f"/home/cj/new_network_modified/checkpoints/D2FK_{epoch}") 
+          torch.save(hat.state_dict(),f"/home/cj/new_network_modified/checkpoints/D2FK_{epoch}") 
            

@@ -21,6 +21,10 @@ datasets:
     io_backend:
       type: disk
 
+  test: 
+  name: Set14
+  type: PairedImageDataset
+  dataroot_gt: /home/cj/new_network_modified/datasets/Set5
 
       
 # Dataloaders
@@ -34,7 +38,7 @@ val_dataloader:
 checkpoint: 
 network_g:
   type: HAT_Vmamba
-  in_chans: 1
+  in_chans: 3
   embed_dims: 96
   hat_depth: [2,6,4,2]
   hat_num_heads: [6,6,6,6]
