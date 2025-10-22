@@ -19,8 +19,6 @@ writer= SummaryWriter()
 def train_step(model, loss_fn, optimizer,scheduler ,dataloader, device, epoch):
     print(f'The model is training on {device}')
     train_loss = 0.
-    total_psnr = 0.
-    total_ssim = 0.
     model.to(device)
     for batch, data in enumerate(dataloader):
         optimizer.zero_grad()
@@ -31,7 +29,7 @@ def train_step(model, loss_fn, optimizer,scheduler ,dataloader, device, epoch):
         train_loss+= loss
         loss.backward()
         optimizer.step()
-        scheduler.step()
+    scheduler.step()
     train_loss/= len(dataloader)
     writer.add_scalar("Loss", train_loss, epoch)
     print(f" | Train loss:{train_loss:.2f}")
