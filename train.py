@@ -34,9 +34,9 @@ def train_step(model, loss_fn, optimizer,scheduler ,dataloader, device, epoch):
         scheduler.step()
     train_loss/= len(dataloader)
     writer.add_scalar("Loss", train_loss, epoch)
-    print(f" | Train loss:{train_loss:.2f}")
+    print(f"Epoch: {epoch} | Train loss:{train_loss:.2f}")
     
-def validation_step(model, loss_fn, dataloader, device):
+def validation_step(model, loss_fn, dataloader, device, epoch):
   val_loss= 0
   total_psnr= 0
   total_ssim= 0
@@ -57,7 +57,7 @@ def validation_step(model, loss_fn, dataloader, device):
     total_psnr/= len(dataloader)
     total_ssim/= len(dataloader)
     val_loss/=  len(dataloader)
-    print(f"Validation Loss: {val_loss} | PSNR: {total_psnr} | SSIM: {total_ssim}")
+    print(f"Epoch : {epoch} | Validation Loss: {val_loss} | PSNR: {total_psnr} | SSIM: {total_ssim}")
     writer.add_scalar("Validation PSNR", total_psnr)
     writer.add_scalar("Validation_SSIM", total_ssim)
     

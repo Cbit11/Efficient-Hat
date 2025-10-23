@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
 from train import train_step, validation_step
 
-file_pth = "/home/cj/new_network_modified/options/Efficient_hat_X2.yaml"
+file_pth = "/home/cjrathod/projects/def-mhassanz/cjrathod/Efficient-Hat/options/Efficient_hat_X2.yaml"
 
 config = parse_from_yaml(file_pth)
 train_data_pth = config['datasets']['train']['dataroot_gt']
@@ -37,16 +37,16 @@ if val_data_pth != None:
   val_data= Validation_dataset(val_data_pth, scale= 4, gt_size=256)
   val_loader= DataLoader(val_data, batch_size= config['val_dataloader']['batch_size'], shuffle = config['val_dataloader']['shuffle'])
 train_loader= DataLoader(train_data, batch_size= config['train_dataloader']['batch_size'], shuffle = config['train_dataloader']['shuffle'])
-
+checkpoint_folder= config['val_dataloader']['checkpoint']
 
 if config['resume_training']:
   hat= resume_training(config, hat)
   print("Resuming Training")
 
-for epoch in tqdm(range(epochs)):
+for epoch in range(epochs):
       train_step(hat, loss, optimizer, lr_scheduler, train_loader, device, epoch)
       if epoch%10==0:
           if val_data_pth!= None:
-           validation_step(hat, loss, val_loader, device)
-          torch.save(hat.state_dict(),f"/home/cj/new_network_modified/checkpoints/D2FK_{epoch}") 
+           validation_step(hat, loss, val_loader, device, epoch)
+          torch.save(hat.state_dict(),checkpoint_folder+ f"HAT_wts{epoch}.pth")
            
