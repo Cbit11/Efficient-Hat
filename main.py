@@ -16,22 +16,25 @@ from data.data_util import parse_from_yaml
 from utils import get_loss, get_optimizer, get_scheduler, resume_training
 from torch.utils.tensorboard import SummaryWriter
 from train import train_step, validation_step
+import argparse
 
+parser = argparse.ArgumentParser(description='Imagenet dataset distributed data parallel test')
 
-# ---------- DDP setup ----------
-def ddp_setup(rank: int, world_size: int):
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "12355"
-    torch.cuda.set_device(rank)
-    init_process_group(backend="nccl", rank=rank, world_size=world_size)
-
-
+parser.add_argument('--init_method', default='tcp://127.0.0.1:3456', type=str, help='')
+parser.add_argument('--dist-backend', default='nccl', type=str, help='')
+parser.add_argument('--world_size', default=1, type=int, help='')
+parser.add_argument('--distributed', action='store_true', help='')
 # ---------- Main training ----------
 def main(rank, world_size):
-    ddp_setup(rank, world_size)
+    args = parser.parse_args()
+    local_rank = int(os.environ.get("SLURM_LOCALID")) 
+    rank = int(os.environ.get("SLURM_PROCID"))
+    current_device = local_rank
 
+    torch.cuda.set_device(current_device)
+    init_process_group(backend=args.dist_backend, init_method=args.init_method, world_size=args.world_size, rank=rank)
     # Load config
-    file_pth = "/home/cj/new_network_modified/options/Efficient_hat_X2.yaml"
+    file_pth = "CHANGE HERE"
     config = parse_from_yaml(file_pth)
 
     train_data_pth = config['datasets']['train']['dataroot_gt']
@@ -71,10 +74,11 @@ def main(rank, world_size):
 
     # Datasets and loaders
     train_dataset = Train_dataset(train_data_pth, scale=4, gt_size=gt_size)
-    train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
+    train_sampler = DistributedSampler(train_dataset)
     train_loader = DataLoader(
         train_dataset,
         batch_size=config['train_dataloader']['batch_size'],
+        shuffle= config['train_dataloader']['shuffle'],
         sampler=train_sampler,
         num_workers=4,
         pin_memory=True
@@ -87,6 +91,7 @@ def main(rank, world_size):
         val_loader = DataLoader(
             val_dataset,
             batch_size=config['val_dataloader']['batch_size'],
+            shuffle= config['train_dataloader']['shuffle'],
             sampler=val_sampler,
             num_workers=4,
             pin_memory=True
@@ -105,13 +110,13 @@ def main(rank, world_size):
                 validation_step(hat, loss_fn, val_loader, device)
             torch.save(
                 hat.module.state_dict(),
-                f"/home/cj/new_network_modified/checkpoints/DDP_D2FK_{epoch}.pth"
+                f"CHANGE HERE"
             )
 
     if writer:
         writer.close()
 
-    destroy_process_group()
+    cleanup()
 
 
 # ---------- Launch ----------
