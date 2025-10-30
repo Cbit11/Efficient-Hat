@@ -625,7 +625,7 @@ class HAT(nn.Module):
                  ape=False,
                  patch_norm=True,
                  use_checkpoint=False,
-                 upscale=2,
+                 upscale,
                  img_range=1.,
                  upsampler='',
                  resi_connection='1conv',
