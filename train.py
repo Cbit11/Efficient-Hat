@@ -1,10 +1,7 @@
 import torch
 from torch.distributed import all_reduce, ReduceOp, barrier
 from basicsr.metrics.psnr_ssim import calculate_psnr_pt, calculate_ssim_pt
-from torch.utils.tensorboard import SummaryWriter
 
-# create writer only on rank 0
-writer = None
 
 def train_step(model, loss_fn, optimizer, scheduler, dataloader, device, epoch, rank=0, world_size=1):
     if rank == 0:
@@ -31,30 +28,16 @@ def train_step(model, loss_fn, optimizer, scheduler, dataloader, device, epoch, 
     train_loss = train_loss / len(dataloader)
     
     train_loss_tensor =train_loss.detach().clone().to(device)
-    if rank == 0:
-        print("Starting pre-ALLREDUCE sync...")
-
-    # Force all CUDA operations to complete
-    torch.cuda.synchronize() 
-    
-    # ALL ranks MUST reach and pass this barrier at the same time
-    # The rank that is slow will cause the others to wait here.
-    barrier() 
-    
-    if rank == 0:
-        print("Pre-ALLREDUCE sync passed. Running ALLREDUCE.")
+   
     all_reduce(train_loss_tensor, op=ReduceOp.AVG)
     avg_loss = train_loss_tensor.item()
-
-    # Step scheduler once per epoch
-    scheduler.step()
-
     # Only rank 0 logs
-    if rank == 0 and writer is not None:
-        writer.add_scalar("Loss/train", avg_loss, epoch)
+    if rank == 0 :
         print(f"[Epoch {epoch}] Train Loss: {avg_loss:.4f}")
+        return avg_loss
+        
 
-    return avg_loss
+    
 
 
 def validation_step(model, loss_fn, dataloader, device, epoch=0, rank=0, world_size=1):
@@ -86,29 +69,11 @@ def validation_step(model, loss_fn, dataloader, device, epoch=0, rank=0, world_s
     val_loss_t = val_loss.detach().clone().to(device)
     psnr_t = total_psnr.detach().clone().to(device)
     ssim_t = total_ssim.detach().clone().to(device)
-    
-    if rank == 0:
-        print("Starting pre-ALLREDUCE sync...")
-
-    # Force all CUDA operations to complete
-    torch.cuda.synchronize() 
-    
-    # ALL ranks MUST reach and pass this barrier at the same time
-    # The rank that is slow will cause the others to wait here.
-    barrier() 
-    
-    if rank == 0:
-        print("Pre-ALLREDUCE sync passed. Running ALLREDUCE.")
-        
+            
     all_reduce(val_loss_t, op=ReduceOp.AVG)
     all_reduce(psnr_t, op=ReduceOp.AVG)
     all_reduce(ssim_t, op=ReduceOp.AVG)
 
     if rank == 0:
         print(f"[Validation] Loss: {val_loss_t.item():.4f}, PSNR: {psnr_t.item():.2f}, SSIM: {ssim_t.item():.4f}")
-        if writer is not None:
-            writer.add_scalar("Validation/Loss", val_loss_t.item(), epoch)
-            writer.add_scalar("Validation/PSNR", psnr_t.item(), epoch)
-            writer.add_scalar("Validation/SSIM", ssim_t.item(), epoch)
-
-    return val_loss_t.item(), psnr_t.item(), ssim_t.item()
+        return val_loss_t.item(), psnr_t.item(), ssim_t.item()
