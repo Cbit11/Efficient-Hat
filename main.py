@@ -10,7 +10,7 @@ from torch.distributed import init_process_group, destroy_process_group
 from tqdm import tqdm
 from basicsr.losses.basic_loss import *
 from basicsr.metrics.psnr_ssim import calculate_psnr_pt, calculate_ssim_pt
-from data.Custom_image_dataset import Train_dataset, Validation_dataset
+from data.Custom_image_dataset import dataset
 from arch.Efficient_HAT import HAT
 from data.data_util import parse_from_yaml
 from utils import get_loss, get_optimizer, get_scheduler, resume_training
@@ -18,7 +18,7 @@ from torch.utils.tensorboard import SummaryWriter
 from train import train_step, validation_step
 import argparse
 import datetime
-
+import wandb
 parser = argparse.ArgumentParser(description='Imagenet dataset distributed data parallel test')
 
 parser.add_argument('--init_method', default='tcp://127.0.0.1:3456', type=str, help='')
@@ -30,17 +30,17 @@ def main():
     args = parser.parse_args()
     local_rank = int(os.environ.get("SLURM_LOCALID")) 
     rank = int(os.environ.get("SLURM_PROCID"))
+    num_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", 1))
     current_device = local_rank
 
     torch.cuda.set_device(current_device)
-    init_process_group(backend=args.dist_backend, init_method=args.init_method, world_size=args.world_size, rank=rank, timeout= datetime.timedelta(seconds=3600))
+    init_process_group(backend=args.dist_backend, init_method=args.init_method, world_size=args.world_size, rank=rank, timeout= datetime.timedelta(seconds=7200))
     # Load config
     file_pth = "/home/cjrathod/projects/def-mhassanz/cjrathod/Efficient-Hat/options/Efficient_hat_X2.yaml"
     config = parse_from_yaml(file_pth)
 
-    train_data_pth = config['datasets']['train']['dataroot_gt']
-    val_data_pth = config['datasets']['val']['dataroot_gt']
-    gt_size = config["datasets"]['train']["gt_size"]  # adjust if in YAML under 'train'
+    train_pth = config['datasets']['train']['file_pth']
+    val_data_pth = config['datasets']['val']['file_pth']
     epochs = config['train']['epoch']
 
     device = torch.device(f"cuda:{rank}")
@@ -74,50 +74,51 @@ def main():
     lr_scheduler = get_scheduler(config, hat.parameters())
 
     # Datasets and loaders
-    train_dataset = Train_dataset(train_data_pth, scale=4, gt_size=gt_size)
+    train_dataset = dataset(train_pth)
     train_sampler = DistributedSampler(train_dataset, shuffle=config['train_dataloader']['shuffle'])
     train_loader = DataLoader(
         train_dataset,
         batch_size=config['train_dataloader']['batch_size'],
         sampler=train_sampler,
-        num_workers=1,
-        pin_memory=True
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last= True
     )
 
     val_loader = None
     if val_data_pth is not None:
-        val_dataset = Validation_dataset(val_data_pth, scale=4, gt_size=gt_size)
+        val_dataset = dataset(val_data_pth)
         val_sampler = DistributedSampler(val_dataset, shuffle=config['train_dataloader']['shuffle'] )
         val_loader = DataLoader(
             val_dataset,
             batch_size=config['val_dataloader']['batch_size'],
             sampler=val_sampler,
-            num_workers=1,
-            pin_memory=True
+            num_workers=num_workers,
+            pin_memory=True, 
+            drop_last= True
         )
 
-    # TensorBoard (rank 0 only)
-    writer = SummaryWriter() if rank == 0 else None
-
+   
     # Training loop
-    for epoch in range(epochs):
-        train_sampler.set_epoch(epoch)
-        train_step(hat, loss_fn, optimizer, lr_scheduler, train_loader, device, epoch)
-
-        if rank == 0 and epoch % 10 == 0:
-            if val_loader is not None:
-                validation_step(hat, loss_fn, val_loader, device)
-            torch.save(
-                hat.module.state_dict(),
-                config['checkpoint'] + f"/Imagenet_{epoch}.pth"
-            )
-
-    if writer:
-        writer.close()
-
-    cleanup()
-
-
+    with wandb.init(project= "SR_Model", config= config) as run: 
+        
+        for epoch in range(epochs):
+            train_sampler.set_epoch(epoch)
+            train_loss= train_step(hat, loss_fn, optimizer, lr_scheduler, train_loader, device, epoch)
+            if rank == 0 :
+                run.log({"Train loss": train_loss})
+            if rank == 0 and epoch % 10 == 0:
+                if val_loader is not None:
+                    val_loss, PSNR, SSIM = validation_step(hat, loss_fn, val_loader, device)
+                    run.log({"Validation loss": val_loss, 
+                             "PSNR": PSNR, 
+                             "SSIM": SSIM})
+                torch.save(
+                    hat.module.state_dict(),
+                    config['checkpoint'] + f"/Imagenet_{epoch}.pth"
+                )
+            lr_scheduler.step()
+        destroy_process_group()
 # ---------- Launch ----------
 if __name__ == "__main__":
     main()
