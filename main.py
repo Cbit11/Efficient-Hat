@@ -16,25 +16,17 @@ from data.data_util import parse_from_yaml
 from utils import get_loss, get_optimizer, get_scheduler, resume_training
 from torch.utils.tensorboard import SummaryWriter
 from train import train_step, validation_step
-import argparse
 import datetime
 import wandb
-parser = argparse.ArgumentParser(description='Imagenet dataset distributed data parallel test')
-
-parser.add_argument('--init_method', default='tcp://127.0.0.1:3456', type=str, help='')
-parser.add_argument('--dist-backend', default='nccl', type=str, help='')
-parser.add_argument('--world_size', default=1, type=int, help='')
-parser.add_argument('--distributed', action='store_true', help='')
 # ---------- Main training ----------
 def main():
-    args = parser.parse_args()
     local_rank = int(os.environ.get("SLURM_LOCALID")) 
     rank = int(os.environ.get("SLURM_PROCID"))
     num_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", 1))
+    world_size = int(os.environ.get("SLURM_NTASKS"))
     current_device = local_rank
-
     torch.cuda.set_device(current_device)
-    init_process_group(backend=args.dist_backend, init_method=args.init_method, world_size=args.world_size, rank=rank, timeout= datetime.timedelta(seconds=7200))
+    init_process_group(backend='nccl', world_size=world_size, rank=rank, timeout= datetime.timedelta(seconds=7200))
     # Load config
     file_pth = "/home/cjrathod/projects/def-mhassanz/cjrathod/Efficient-Hat/options/Efficient_hat_X2.yaml"
     config = parse_from_yaml(file_pth)
@@ -43,7 +35,7 @@ def main():
     val_data_pth = config['datasets']['val']['file_pth']
     epochs = config['train']['epoch']
 
-    device = torch.device(f"cuda:{rank}")
+    device = torch.device(f"cuda:{local_rank}")
 
     # Model
     hat = HAT(
@@ -64,9 +56,9 @@ def main():
 
     if config['resume_training']:
         hat = resume_training(config, hat)
-        print(f"[Rank {rank}] Resuming training")
-
-    hat = DDP(hat, device_ids=[rank])
+        if rank == 0:
+            print(f"Resuming training")
+    hat = DDP(hat, device_ids=[current_device])
 
     # Loss, optimizer, scheduler
     loss_fn = get_loss(config)
@@ -98,27 +90,38 @@ def main():
             drop_last= True
         )
 
-   
-    # Training loop
-    with wandb.init(project= "SR_Model", config= config) as run: 
+    if rank ==0:
+        run = wandb.init(project= "SR_Model", config= config) 
         
-        for epoch in range(epochs):
-            train_sampler.set_epoch(epoch)
-            train_loss= train_step(hat, loss_fn, optimizer, lr_scheduler, train_loader, device, epoch)
-            if rank == 0 :
-                run.log({"Train loss": train_loss})
-            if rank == 0 and epoch % 10 == 0:
-                if val_loader is not None:
-                    val_loss, PSNR, SSIM = validation_step(hat, loss_fn, val_loader, device)
+    for epoch in range(epochs):
+        train_sampler.set_epoch(epoch)
+        train_loss= train_step(hat, loss_fn, optimizer, train_loader, device, epoch, rank ,  world_size)
+        if rank == 0 :
+            run.log({"Train loss": train_loss})
+        if epoch % 10 == 0:
+            if val_loader is not None:
+                # ALL processes run validation
+                val_loss, PSNR, SSIM = validation_step(hat, loss_fn, val_loader, device, epoch, rank,world_size)
+                
+                # ONLY rank 0 logs and saves
+                if rank == 0:
                     run.log({"Validation loss": val_loss, 
                              "PSNR": PSNR, 
                              "SSIM": SSIM})
+                    torch.save(
+                        hat.module.state_dict(),
+                        config['checkpoint'] + f"/Imagenet_{epoch}.pth"
+                    )
+
+            elif rank == 0: 
                 torch.save(
                     hat.module.state_dict(),
                     config['checkpoint'] + f"/Imagenet_{epoch}.pth"
                 )
-            lr_scheduler.step()
-        destroy_process_group()
+        lr_scheduler.step()
+    if rank == 0:
+        wandb.finish()
+    destroy_process_group()
 # ---------- Launch ----------
 if __name__ == "__main__":
     main()
