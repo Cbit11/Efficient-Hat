@@ -12,9 +12,9 @@ import h5py
 class dataset(Dataset):
     def __init__(self,file_pth):
         super(dataset, self).__init__()
-        self.file = h5py(file_pth, "r")
-        self.hr_imgs= self.file[list(self.file.keys()[0])]
-        self.lr_imgs= self.file[list(self.file.keys()[1])]
+        self.file = h5py.File(file_pth, "r")
+        self.hr_imgs= self.file[ "HR_Image_256"]
+        self.lr_imgs= self.file["LR_Image_X4"]
     def __len__(self):
         return len(self.hr_imgs)
     def __getitem__(self, index):
