@@ -10,8 +10,8 @@ from basicsr.utils.color_util import rgb2ycbcr
 from basicsr.utils import FileClient, imfrombytes, img2tensor
 from basicsr.utils.img_util import imwrite, tensor2img
 import h5py
-img_pth = "/home/cjrathod/scratch/Imagenet_clean"
-output_pth = "/home/cjrathod/scratch/Paired_imagenet_data.h5"
+img_pth = "/home/cjrathod/scratch/datasets/DIV2K/DIV2K_train_HR"
+output_pth = "/home/cjrathod/scratch/Paired_DIV2K_data.h5"
 gt_size= 256
 scale = 4
 num_patches_image= 10
