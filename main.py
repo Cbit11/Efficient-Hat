@@ -91,7 +91,7 @@ def main():
         )
 
     if rank ==0:
-        run = wandb.init(project= "SR_Model", config= config) 
+        run = wandb.init(project= "SR_Model", config= config, mode= "offline") 
         
     for epoch in range(epochs):
         train_sampler.set_epoch(epoch)
