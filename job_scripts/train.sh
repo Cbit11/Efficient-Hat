@@ -19,7 +19,7 @@ export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 export NCCL_DEBUG=INFO
 export MASTER_PORT=3456
 export TORCH_NCCL_TRACE_BUFFER_SIZE=1048576
-export WANDB_API_KEY=2173710a2781c9515644864d230649a0b5a5ff50
+export WANDB_API_KEY= ""
 
 echo "r$SLURM_NODEID master: $MASTER_ADDR"
 echo "r$SLURM_NODEID Launching python script"
