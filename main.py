@@ -1,28 +1,26 @@
 import os
 import torch
-import torch.nn as nn
-import numpy as np
-import torch.multiprocessing as mp
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from tqdm import tqdm
 from basicsr.losses.basic_loss import *
-from basicsr.metrics.psnr_ssim import calculate_psnr_pt, calculate_ssim_pt
 from data.Custom_image_dataset import dataset
 from arch.Efficient_HAT import HAT
 from data.data_util import parse_from_yaml
 from utils import get_loss, get_optimizer, get_scheduler, resume_training
-from torch.utils.tensorboard import SummaryWriter
 from train import train_step, validation_step
 import datetime
 import wandb
+import h5py
+from sklearn.model_selection import train_test_split
+import numpy as np
 # ---------- Main training ----------
 def main():
     local_rank = int(os.environ.get("SLURM_LOCALID")) 
     rank = int(os.environ.get("SLURM_PROCID"))
-    num_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", 1))
+    num_workers= 8
     world_size = int(os.environ.get("SLURM_NTASKS"))
     current_device = local_rank
     torch.cuda.set_device(current_device)
@@ -32,7 +30,8 @@ def main():
     config = parse_from_yaml(file_pth)
 
     train_pth = config['datasets']['train']['file_pth']
-    val_data_pth = config['datasets']['val']['file_pth']
+    train_indices = config['datasets']['train']['train_indices']
+    val_indices = config['datasets']['train']['val_indices']
     epochs = config['train']['epoch']
 
     device = torch.device(f"cuda:{local_rank}")
@@ -66,7 +65,7 @@ def main():
     lr_scheduler = get_scheduler(config, hat.parameters())
 
     # Datasets and loaders
-    train_dataset = dataset(train_pth)
+    train_dataset = dataset(train_pth, train_indices)
     train_sampler = DistributedSampler(train_dataset, shuffle=config['train_dataloader']['shuffle'])
     train_loader = DataLoader(
         train_dataset,
@@ -76,20 +75,16 @@ def main():
         pin_memory=True,
         drop_last= True
     )
-
-    val_loader = None
-    if val_data_pth is not None:
-        val_dataset = dataset(val_data_pth)
-        val_sampler = DistributedSampler(val_dataset, shuffle=config['train_dataloader']['shuffle'] )
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=config['val_dataloader']['batch_size'],
-            sampler=val_sampler,
-            num_workers=num_workers,
-            pin_memory=True, 
-            drop_last= True
-        )
-
+    val_dataset= dataset(train_pth, val_indices)
+    val_sampler = DistributedSampler(val_dataset, shuffle=config['val_dataloader']['shuffle'])
+    val_loader= DataLoader(
+        val_dataset, 
+        batch_size=config['val_dataloader']['batch_size'],
+        sampler=val_sampler,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last= True
+    )
     if rank ==0:
         run = wandb.init(project= "SR_Model", config= config, mode= "offline") 
         

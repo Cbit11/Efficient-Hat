@@ -1,25 +1,40 @@
-import torch 
 import numpy as np 
-import os
-import cv2
-from torch.utils.data import Dataset, DataLoader
-from basicsr.data.transforms import augment, paired_random_crop
-from PIL import Image
-from basicsr.utils.matlab_functions import imresize
-from basicsr.utils.color_util import rgb2ycbcr
-from basicsr.utils import FileClient, imfrombytes, img2tensor
+from torch.utils.data import Dataset
+from basicsr.utils import img2tensor
 import h5py 
-class dataset(Dataset):
-    def __init__(self,file_pth):
-        super(dataset, self).__init__()
-        self.file = h5py.File(file_pth, "r")
-        self.hr_imgs= self.file[ "HR_Image_256"]
-        self.lr_imgs= self.file["LR_Image_X4"]
-    def __len__(self):
-        return len(self.hr_imgs)
-    def __getitem__(self, index):
-        img_gt = self.hr_imgs[index]
-        img_lq = self.lr_imgs[index]
-        img_gt, img_lq = img2tensor([img_gt, img_lq], float32=True)
-        return {"GT":img_gt/255., "LR":img_lq/255.}
 
+class dataset(Dataset):
+    def __init__(self, file_pth, indices_pth):
+        super(dataset, self).__init__()
+        self.file_pth = file_pth 
+        
+        # 1. Load indices ONCE (in the main process)
+        self.indices = np.load(indices_pth)
+        
+        # 2. Set file handle to None. Each worker will 
+        #    create its own.
+        self.file = None
+        self.hr_imgs = None
+        self.lr_imgs = None
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, index):
+        
+        # 3. This 'if' check is the key
+        #    It runs ONCE PER WORKER
+        if self.file is None:
+            self.file = h5py.File(self.file_pth, "r")
+            self.hr_imgs = self.file["HR_Image_256"]
+            self.lr_imgs = self.file["LR_Image_X4"] 
+        
+        # 4. Get the true index from the list (already in memory)
+        true_index = self.indices[index]
+        
+        # 5. Read from the worker's open file handle
+        img_gt = self.hr_imgs[true_index]
+        img_lq = self.lr_imgs[true_index]
+        
+        img_gt, img_lq = img2tensor([img_gt, img_lq], float32=True)
+        return {"GT": img_gt / 255., "LR": img_lq / 255.}
